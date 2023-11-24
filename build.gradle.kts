@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "1.9.0"
+    kotlin("plugin.serialization") version "1.9.21"
     application
 }
 
@@ -11,6 +12,8 @@ repositories {
 }
 
 dependencies {
+    implementation("org.eclipse.lsp4j:org.eclipse.lsp4j.debug:0.21.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
     testImplementation(kotlin("test"))
 }
 

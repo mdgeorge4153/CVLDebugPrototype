@@ -1,0 +1,15 @@
+{
+    "contracts": {
+    },
+    "calls": {
+        "0": {
+            
+        }
+    },
+    "initial_values": {
+    },
+
+    "trace": [
+        {"type": "call", "callId": "0", "args": []}
+    ]
+}
