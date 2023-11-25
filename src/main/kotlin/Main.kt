@@ -3,7 +3,7 @@ import org.eclipse.lsp4j.debug.launch.DSPLauncher
 import java.io.File
 
 fun main(args : Array<String>) {
-    val input = File("example/example.trace.json").readText()
+    val input = File("sampleWorkspace/example.trace.json").readText()
     val trace = Json.decodeFromString<Trace>(input)
     val adapter = DebugAdapter(trace)
 

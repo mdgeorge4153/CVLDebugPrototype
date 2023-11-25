@@ -176,5 +176,5 @@ object example : Example {
 
 fun main() {
     val output = Json.encodeToString(example.makeTrace())
-    File("example/example.trace.json").writeText(output)
+    File("sampleWorkspace/example.trace.json").writeText(output)
 }
