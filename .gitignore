@@ -10,6 +10,7 @@ build/
 .idea/jarRepositories.xml
 .idea/compiler.xml
 .idea/libraries/
+.idea/**
 *.iws
 *.iml
 *.ipr
@@ -35,9 +36,6 @@ bin/
 /dist/
 /nbdist/
 /.nb-gradle/
-
-### VS Code ###
-.vscode/
 
 ### Mac OS ###
 .DS_Store

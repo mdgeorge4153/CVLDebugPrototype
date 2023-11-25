@@ -1,0 +1,85 @@
+{
+  "name": "cvl-debug",
+  "displayName": "CVL Counterexample Debugger",
+  "version": "0.0",
+  "publisher": "Certora",
+  "description": "Debugger support for the Certora Prover",
+  "author": {
+    "name": "Certora"
+  },
+  "engines": {
+    "vscode": "^1.17.0"
+  },
+  "icon": "./vscode/logo.png",
+  "categories": ["Debuggers"],
+
+  "contributes": {
+    "languages": [
+      {
+        "id": "CVL",
+        "extensions": [".cvl", ".spec"],
+        "icon": "./vscode/logo.png"
+      },
+      {
+        "id": "Solidity",
+        "extensions": [".sol"]
+      }
+    ],
+    "breakpoints": [{ "language": "CVL" }, { "language":  "Solidity" }],
+    "debuggers": [
+      {
+        "type": "CVL",
+        "label": "CVL Debug",
+
+        "program": "./build/scripts/Debugger",
+
+        "configurationAttributes": {
+          "launch": {
+            "required": ["program"],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "Absolute path to a text file.",
+                "default": "${workspaceFolder}/${command:AskForProgramName}"
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Automatically stop after launch.",
+                "default": true
+              }
+            }
+          }
+        },
+
+        "initialConfigurations": [
+          {
+            "type": "mock",
+            "request": "launch",
+            "name": "Ask for file name",
+            "program": "${workspaceFolder}/${command:AskForProgramName}",
+            "stopOnEntry": true
+          }
+        ],
+
+        "configurationSnippets": [
+          {
+            "label": "Mock Debug: Launch",
+            "description": "A new configuration for launching a mock debug program",
+            "body": {
+              "type": "mock",
+              "request": "launch",
+              "name": "${2:Launch Program}",
+              "program": "^\"\\${workspaceFolder}/${1:Program}\""
+            }
+          }
+        ],
+
+        "variables": {
+          "AskForProgramName": "extension.mock-debug.getProgramName"
+        }
+      }
+    ]
+  },
+
+  "activationEvents": ["onDebug", "onCommand:extension.mock-debug.getProgramName"]
+}
