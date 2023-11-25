@@ -7,6 +7,7 @@ data class Trace(
     val initState    : Map<LocationId, DataValue>,
     val instructions : List<Instruction>,
     val calls        : Map<CallId, CallMetadata>,
+    val sources      : List<String>,
 )
 
 /** An abstract tree with [String]-labeled children and [LocationId]s as leaves */
@@ -67,7 +68,8 @@ typealias CallId = String
 data class CallMetadata(
     val functionName : String,
     val locals : DataTree.Structure,
-    val sourceLocation : SourceLocation
+    val startLocation : SourceLocation,
+    val endLocation   : SourceLocation,
 )
 
 /** A line in a source file */

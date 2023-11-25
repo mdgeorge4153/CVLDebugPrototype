@@ -3,7 +3,7 @@ import kotlinx.serialization.Serializable
 /**
  * An event of interest that occurs during execution.  Instructions contain enough data that
  * they can be both applied and unapplied without additional information about the trace.  For example,
- * [StoreInstruction]s contain the old value as well as the new value so that they can be rolled back
+ * [StoreInstruction]s contain the old value as well as the new value so that they can be easily rolled back
  */
 @Serializable
 sealed interface Instruction

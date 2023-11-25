@@ -1,5 +1,6 @@
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
+import java.io.File
 
 
 /** Based on spec and source in example/ERC20 */
@@ -44,6 +45,7 @@ object example : Example {
     override val ruleFile = "ERC20.spec"
     override val ruleName = "transferSpec"
     override val ruleLine = 17
+    override val ruleEndLine = 36
 
     override fun TraceBuilder.trace() {
         newline("ERC20.spec", 18)
@@ -67,7 +69,7 @@ object example : Example {
 
         newline("ERC20.spec", 23)
         val balance_sender_before = newVariable("mathint", "balance_sender_before")
-        call("balanceOf", "ERC20.sol", 102) {
+        call("balanceOf", "ERC20.sol", 102, 110) {
             val account = newVariable("address", "account", "0xffff")
             newline("ERC20.sol", 109)
             load(storage.get("ERC20", "_balances", "0xffff"))
@@ -76,7 +78,7 @@ object example : Example {
 
         newline("ERC20.spec", 24)
         val balance_recip_before  = newVariable("mathint", "balance_recip_before")
-        call("balanceOf", "ERC20.sol", 102) {
+        call("balanceOf", "ERC20.sol", 102, 110) {
             val account = newVariable("address", "account", "0xffff")
             newline("ERC20.sol", 109)
             load(storage.get("ERC20", "_balances", "0xffff"))
@@ -84,7 +86,7 @@ object example : Example {
         store(balance_recip_before, "16")
 
         newline("ERC20.spec", 26)
-        call("transfer", "ERC20.sol", 120) {
+        call("transfer", "ERC20.sol", 120, 128) {
             val recipient = newVariable("address", "recipient", "0xffff")
             val amount    = newVariable("uint256", "amount", "15")
 
@@ -95,7 +97,7 @@ object example : Example {
             store(storage.get("Ghosts", "nativeBalances", "0xfffe"), "0")
 
             newline("ERC20.sol", 126)
-            call("_transfer", "ERC20.sol", 262) {
+            call("_transfer", "ERC20.sol", 262, 285) {
                 newVariable("address", "sender", "0xffff")
                 newVariable("address", "recipient", "0xffff")
                 newVariable("uint256", "amount", "15")
@@ -104,7 +106,7 @@ object example : Example {
                 newline("ERC20.sol", 268)
 
                 newline("ERC20.sol", 270)
-                call("_beforeTokenTransfer", "ERC20.sol", 374) {
+                call("_beforeTokenTransfer", "ERC20.sol", 374, 378) {
                     newline("ERC20.sol", 378)
                 }
 
@@ -114,7 +116,7 @@ object example : Example {
                 store(senderBalance, "16")
 
                 newline("ERC20.sol", 278)
-                call("hook Sstore ERC20._balances", "ERC20.spec", 42) {
+                call("hook Sstore ERC20._balances", "ERC20.spec", 42, 45) {
                     newVariable("address", "a", "0xffff")
                     newVariable("uint", "new_value", "0x10")
                     newVariable("uint", "old_value", "0x1")
@@ -127,7 +129,7 @@ object example : Example {
 
                 newline("ERC20.sol", 280)
                 load(storage.get("ERC20", "_balances", "0xffff"))
-                call("hook Sstore ERC20._balances", "ERC20.spec", 42) {
+                call("hook Sstore ERC20._balances", "ERC20.spec", 42, 45) {
                     newVariable("address", "a", "0xffff")
                     newVariable("uint", "new_value", "0x10")
                     newVariable("uint", "old_value", "0x1")
@@ -138,7 +140,7 @@ object example : Example {
                 }
                 store(storage.get("ERC20", "_balances", "0xffff"), "16")
 
-                call("_afterTokenTransfer", "ERC20.sol", 394) {
+                call("_afterTokenTransfer", "ERC20.sol", 394, 398) {
                     newline("ERC20.sol", 398)
                 }
             }
@@ -146,7 +148,7 @@ object example : Example {
 
         newline("ERC20.spec", 28)
         val balance_sender_after = newVariable("mathint", "balance_sender_after")
-        call("balanceOf", "ERC20.sol", 102) {
+        call("balanceOf", "ERC20.sol", 102, 110) {
             newVariable("address", "account", "0xffff")
             newline("ERC20.sol", 109)
             load(storage.get("ERC20", "_balances", "0xffff"))
@@ -155,7 +157,7 @@ object example : Example {
 
         newline("ERC20.spec", 29)
         val balance_recip_after  = newVariable("mathint", "balance_recip_after")
-        call("balanceOf", "ERC20.sol", 102) {
+        call("balanceOf", "ERC20.sol", 102, 110) {
             newVariable("address", "account", "0xffff")
             newline("ERC20.sol", 109)
             load(storage.get("ERC20", "_balances", "0xffff"))
@@ -173,5 +175,6 @@ object example : Example {
 }
 
 fun main() {
-    println(Json.encodeToString(example.makeTrace()))
+    val output = Json.encodeToString(example.makeTrace())
+    File("example/example.trace.json").writeText(output)
 }
