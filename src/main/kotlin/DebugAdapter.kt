@@ -3,15 +3,16 @@ import org.eclipse.lsp4j.debug.services.IDebugProtocolClient
 import org.eclipse.lsp4j.debug.services.IDebugProtocolServer
 import java.io.File
 import java.util.concurrent.CompletableFuture
+import kotlin.system.exitProcess
 
-val log = File("log.txt").printWriter()
+val log = File("logs/log.txt").printWriter()
 
 class DebugAdapter(val state : State) : IDebugProtocolServer {
 
     constructor(trace : Trace) : this(State(trace))
 
     var userBreakpoints : List<Breakpoint> = emptyList()
-    var client : IDebugProtocolClient? = null
+    lateinit var client : IDebugProtocolClient
 
     object capabilities : Capabilities() {
         override fun getSupportsRestartRequest() = true
@@ -25,12 +26,22 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
 
     fun connect(client : IDebugProtocolClient) {
         this.client = client
-        client.initialized()
         log.println("connected")
+    }
+
+    override fun terminate(args: TerminateArguments?): CompletableFuture<Void> {
+        client.terminated(TerminatedEventArguments())
+        exitProcess(0)
+    }
+
+    override fun disconnect(args: DisconnectArguments?): CompletableFuture<Void> {
+        client.terminated(TerminatedEventArguments())
+        exitProcess(0)
     }
 
     override fun initialize(args: InitializeRequestArguments?): CompletableFuture<Capabilities> {
         log.println("initializing")
+        client.initialized()
         return capabilities.asFuture()
     }
 
@@ -42,7 +53,7 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
         log.println("restart")
 
         state.reverseUntil { false }
-        client!!.stopped(StoppedEventArguments().apply {
+        client.stopped(StoppedEventArguments().apply {
             reason = "TODO"
         })
         return done
@@ -53,7 +64,8 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
     // }
 
     override fun setBreakpoints(args: SetBreakpointsArguments?): CompletableFuture<SetBreakpointsResponse> {
-        TODO()
+        // TODO
+        return SetBreakpointsResponse().asFuture()
     }
 
     // override fun setFunctionBreakpoints(args: SetFunctionBreakpointsArguments?): CompletableFuture<SetFunctionBreakpointsResponse> {
@@ -61,20 +73,23 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
     // }
 
     override fun setExceptionBreakpoints(args: SetExceptionBreakpointsArguments?): CompletableFuture<SetExceptionBreakpointsResponse> {
-        TODO()
+        // TODO
+        return SetExceptionBreakpointsResponse().asFuture()
     }
 
     override fun dataBreakpointInfo(args: DataBreakpointInfoArguments?): CompletableFuture<DataBreakpointInfoResponse> {
-        TODO()
+        // TODO
+        return DataBreakpointInfoResponse().asFuture()
     }
 
     override fun setDataBreakpoints(args: SetDataBreakpointsArguments?): CompletableFuture<SetDataBreakpointsResponse> {
-        TODO()
+        // TODO
+        return SetDataBreakpointsResponse().asFuture()
     }
 
     override fun continue_(args: ContinueArguments?): CompletableFuture<ContinueResponse> {
-
-        TODO()
+        // TODO
+        return ContinueResponse().asFuture()
     }
 
     override fun next(args: NextArguments?): CompletableFuture<Void> {
@@ -83,27 +98,33 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
         runUntil { it is NewlineInstruction && it.context == }
 
          */
-        TODO()
+        // TODO
+        return done
     }
 
     override fun stepIn(args: StepInArguments?): CompletableFuture<Void> {
-        TODO()
+        // TODO
+        return done
     }
 
     override fun stepOut(args: StepOutArguments?): CompletableFuture<Void> {
-        TODO()
+        // TODO
+        return done
     }
 
     override fun stepBack(args: StepBackArguments?): CompletableFuture<Void> {
-        TODO()
+        // TODO
+        return done
     }
 
     override fun reverseContinue(args: ReverseContinueArguments?): CompletableFuture<Void> {
-        TODO()
+        // TODO
+        return done
     }
 
     override fun restartFrame(args: RestartFrameArguments?): CompletableFuture<Void> {
-        TODO()
+        // TODO
+        return done
     }
 
     override fun pause(args: PauseArguments?): CompletableFuture<Void> {
@@ -151,11 +172,13 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
 
     override fun variables(args: VariablesArguments?): CompletableFuture<VariablesResponse> {
 
-        TODO()
+        // TODO
+        return VariablesResponse().asFuture()
     }
 
     override fun source(args: SourceArguments?): CompletableFuture<SourceResponse> {
-        TODO()
+        // TODO
+        return SourceResponse().asFuture()
     }
 
     override fun threads(): CompletableFuture<ThreadsResponse> {
@@ -166,11 +189,13 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
     }
 
     override fun loadedSources(args: LoadedSourcesArguments?): CompletableFuture<LoadedSourcesResponse> {
-        TODO()
+        // TODO
+        return LoadedSourcesResponse().asFuture()
     }
 
     override fun evaluate(args: EvaluateArguments?): CompletableFuture<EvaluateResponse> {
-        TODO()
+        // TODO
+        return EvaluateResponse().asFuture()
     }
 
 

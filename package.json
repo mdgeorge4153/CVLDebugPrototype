@@ -31,7 +31,7 @@
         "type": "CVL",
         "label": "CVL Debug",
 
-        "program": "./build/install/Debugger/bin/Debugger",
+        "program": "./backend.sh",
         "languages": [ "cvl" ]
 
       }
