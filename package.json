@@ -31,7 +31,7 @@
         "type": "CVL",
         "label": "CVL Debug",
 
-        "program": "./test.sh",
+        "program": "./build/install/Debugger/bin/Debugger",
         "languages": [ "cvl" ]
 
       }

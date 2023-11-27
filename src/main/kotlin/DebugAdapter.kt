@@ -1,7 +1,10 @@
 import org.eclipse.lsp4j.debug.*
 import org.eclipse.lsp4j.debug.services.IDebugProtocolClient
 import org.eclipse.lsp4j.debug.services.IDebugProtocolServer
+import java.io.File
 import java.util.concurrent.CompletableFuture
+
+val log = File("log.txt").printWriter()
 
 class DebugAdapter(val state : State) : IDebugProtocolServer {
 
@@ -22,17 +25,22 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
 
     fun connect(client : IDebugProtocolClient) {
         this.client = client
+        client.initialized()
+        log.println("connected")
     }
 
     override fun initialize(args: InitializeRequestArguments?): CompletableFuture<Capabilities> {
+        log.println("initializing")
         return capabilities.asFuture()
     }
 
-    override fun launch(args: MutableMap<String, Any>?): CompletableFuture<Void> = done
+    override fun launch(args: MutableMap<String, Any>?): CompletableFuture<Void> = done.also { log.println("launch") }
 
-    override fun attach(args: MutableMap<String, Any>?): CompletableFuture<Void> = done
+    override fun attach(args: MutableMap<String, Any>?): CompletableFuture<Void> = done.also { log.println("attach") }
 
     override fun restart(args: RestartArguments?): CompletableFuture<Void> {
+        log.println("restart")
+
         state.reverseUntil { false }
         client!!.stopped(StoppedEventArguments().apply {
             reason = "TODO"
@@ -106,6 +114,7 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
     val frames = mutableListOf<State.StackFrame>()
 
     override fun stackTrace(args: StackTraceArguments?): CompletableFuture<StackTraceResponse> {
+        log.println("stackTrace")
         val frames = state.stack.mapIndexed { index, frame ->
             StackFrame().apply {
                 id = index
@@ -120,6 +129,8 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
     }
 
     override fun scopes(args: ScopesArguments?): CompletableFuture<ScopesResponse> {
+        log.println("scopes")
+
         return ScopesResponse().apply {
             scopes = arrayOf(
                 Scope().apply {
@@ -148,6 +159,7 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
     }
 
     override fun threads(): CompletableFuture<ThreadsResponse> {
+        log.println("threads")
         return ThreadsResponse().apply {
             threads = arrayOf(Thread().apply { id = 0; name = "rule" })
         }.asFuture()
