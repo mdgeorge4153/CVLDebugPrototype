@@ -1,4 +1,4 @@
 #!/bin/sh
 
-echo "hello world" >> output.txt
+echo "hello world" > output.txt
 
