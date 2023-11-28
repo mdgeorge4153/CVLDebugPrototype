@@ -23,7 +23,7 @@ interface Example {
 
     fun makeTrace() : Trace {
         val builder = ExampleBuilder { initStorage() }
-        builder.call(ruleName, ruleFile, ruleLine, ruleEndLine) { trace() }
+        builder.call(ruleName, ruleFile, ruleLine) { trace() }
         return builder.getTrace()
     }
 }
@@ -83,7 +83,7 @@ private class ExampleBuilder(makeStorage : TreeBuilder.() -> Unit) {
             endLine: Int,
             body: TraceBuilder.() -> Unit
         ) {
-            this@ExampleBuilder.call(functionName, sourceFile, startLine, endLine, body)
+            this@ExampleBuilder.call(functionName, sourceFile, startLine, body)
         }
 
         override fun newline(file: String, line: Int) {
