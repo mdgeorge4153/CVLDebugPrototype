@@ -14,6 +14,9 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
     var userBreakpoints : List<Breakpoint> = emptyList()
     lateinit var client : IDebugProtocolClient
 
+    val variables = mutableListOf<DataTree.Structure>().apply { allocate(DataTree.Structure(listOf(), "dummy"))}
+    val globalsId = variables.allocate(state.trace.contracts)
+
     object capabilities : Capabilities() {
         override fun getSupportsRestartRequest() = true
         // override fun getSupportsBreakpointLocationsRequest() = true
@@ -45,7 +48,15 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
         return capabilities.asFuture()
     }
 
-    override fun launch(args: MutableMap<String, Any>?): CompletableFuture<Void> = done.also { log.println("launch") }
+    override fun launch(args: MutableMap<String, Any>?): CompletableFuture<Void> {
+        client.stopped(StoppedEventArguments().apply {
+            reason = "entry"
+            description = "Call trace has been loaded"
+            threadId = 0
+            allThreadsStopped = true
+        })
+        return done
+    }
 
     override fun attach(args: MutableMap<String, Any>?): CompletableFuture<Void> = done.also { log.println("attach") }
 
@@ -87,18 +98,23 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
         return SetDataBreakpointsResponse().asFuture()
     }
 
+    private fun sendStoppedMessage(stopReason : String = "step") {
+        client.stopped(StoppedEventArguments().apply {
+            reason = stopReason
+            threadId = 0
+            allThreadsStopped = true
+        })
+    }
+
     override fun continue_(args: ContinueArguments?): CompletableFuture<ContinueResponse> {
         // TODO
         return ContinueResponse().asFuture()
     }
 
     override fun next(args: NextArguments?): CompletableFuture<Void> {
-        /*
-        val context =
-        runUntil { it is NewlineInstruction && it.context == }
-
-         */
-        // TODO
+        val currentCall = state.stack.last().callId
+        state.runUntil { it is NewlineInstruction && it.context == currentCall }
+        sendStoppedMessage()
         return done
     }
 
@@ -113,7 +129,8 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
     }
 
     override fun stepBack(args: StepBackArguments?): CompletableFuture<Void> {
-        // TODO
+        state.reverseUntil { it is NewlineInstruction && it.context == state.stack.last().callId }
+        sendStoppedMessage()
         return done
     }
 
@@ -132,18 +149,17 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
         return done
     }
 
-    val frames = mutableListOf<State.StackFrame>()
-
     override fun stackTrace(args: StackTraceArguments?): CompletableFuture<StackTraceResponse> {
         log.println("stackTrace")
-        val frames = state.stack.mapIndexed { index, frame ->
+        val frames = state.stack.map { frame ->
             StackFrame().apply {
-                id = index
+                id = variables.allocate(state.trace.calls[frame.callId]!!.locals)
                 name = frame.call.functionName
                 source = Source().apply { path = frame.sourceLine.file }
                 line = frame.sourceLine.line
             }
-        }
+        }.reversed()
+
         return StackTraceResponse().apply {
             stackFrames = frames.toTypedArray()
         }.asFuture()
@@ -155,12 +171,8 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
         return ScopesResponse().apply {
             scopes = arrayOf(
                 Scope().apply {
-                    name = "Contracts"
-                    variablesReference = -2
-                },
-                Scope().apply {
-                    name = "Ghosts"
-                    variablesReference = -1
+                    name = "Globals"
+                    variablesReference = globalsId
                 },
                 Scope().apply {
                     name = "Locals"
@@ -171,14 +183,15 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
     }
 
     override fun variables(args: VariablesArguments?): CompletableFuture<VariablesResponse> {
+        val tree = variables[args!!.variablesReference]
+        val vars = tree.children.mapNotNull { (varName, varValue) -> Variable().apply {
+            name = varName
+            type = varValue.cvlType
+            value = (varValue as? DataTree.Leaf)?.let { state.data[it.location]?.value ?: return@mapNotNull null } ?: ""
+            variablesReference = (varValue as? DataTree.Structure)?.let { variables.allocate(it) } ?: 0
+        }}
 
-        // TODO
-        return VariablesResponse().asFuture()
-    }
-
-    override fun source(args: SourceArguments?): CompletableFuture<SourceResponse> {
-        // TODO
-        return SourceResponse().asFuture()
+        return VariablesResponse().apply { variables = vars.toTypedArray() }.asFuture()
     }
 
     override fun threads(): CompletableFuture<ThreadsResponse> {

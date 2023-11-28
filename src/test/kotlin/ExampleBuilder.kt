@@ -1,13 +1,11 @@
-import example.initStorage
-
 interface TreeBuilder {
-    fun newStruct(name : String, f : TreeBuilder.() -> Unit) : DataTree.Structure
+    fun newStruct(type : String, name : String, f : TreeBuilder.() -> Unit) : DataTree.Structure
     fun newVariable(type : String, name : String, value : String? = null): LocationId
 }
 
 interface TraceBuilder : TreeBuilder {
-    fun load(loc : LocationId) : Unit
-    fun store(loc : LocationId, value : String) : Unit
+    fun load(loc : LocationId)
+    fun store(loc : LocationId, value : String)
     fun call(functionName : String, sourceFile: String, startLine: Int, endLine: Int, body : TraceBuilder.() -> Unit)
     fun newline(file : String, line : Int)
     val storage : DataTree
@@ -32,7 +30,7 @@ interface Example {
 
 // private implementation //////////////////////////////////////////////////////////////////////////////////////////////
 
-private class ExampleBuilder(val makeStorage : TreeBuilder.() -> Unit) {
+private class ExampleBuilder(makeStorage : TreeBuilder.() -> Unit) {
     val locations = Allocator<LocationId, LocationMetadata>({ it }, "location")
     val calls     = Allocator<CallId, CallMetadata>({ it }, "call")
 
@@ -40,20 +38,20 @@ private class ExampleBuilder(val makeStorage : TreeBuilder.() -> Unit) {
 
     val files     = mutableSetOf<String>()
 
-    lateinit var currentState : MutableMap<LocationId, DataValue>
+    var currentState : MutableMap<LocationId, DataValue>
 
-    lateinit var initialStorage : Map<LocationId, DataValue>
-    lateinit var storageLayout  : DataTree.Structure
+    var initialStorage : Map<LocationId, DataValue>
+    var storageLayout  : DataTree.Structure
 
     init {
-        val storageBuilder = TreeBuilderImpl()
+        val storageBuilder = TreeBuilderImpl("Storage")
         storageBuilder.makeStorage()
         initialStorage = storageBuilder.state.toMap()
         storageLayout  = storageBuilder.getStructure()
         currentState = storageBuilder.state
     }
 
-    fun call(functionName: String, sourceFile: String, startLine: Int, endLine: Int, body: TraceBuilder.() -> Unit) {
+    fun call(functionName: String, sourceFile: String, startLine: Int, body: TraceBuilder.() -> Unit) {
         val childBuilder = TraceBuilderImpl(functionName, SourceLocation(sourceFile, startLine))
         instructions.add(CallInstruction(childBuilder.callId))
         childBuilder.body()
@@ -71,7 +69,7 @@ private class ExampleBuilder(val makeStorage : TreeBuilder.() -> Unit) {
         }
 
         val metadata : CallMetadata
-            get() = CallMetadata(functionName, DataTree.Structure(locals), start, sourceLocation)
+            get() = CallMetadata(functionName, DataTree.Structure(locals, ""), start, sourceLocation)
 
         override fun store(loc: LocationId, value: String) {
             instructions.add(StoreInstruction(loc, currentState[loc], DataValue(value)))
@@ -97,10 +95,10 @@ private class ExampleBuilder(val makeStorage : TreeBuilder.() -> Unit) {
         override val storage: DataTree
             get() = getStorage()
 
-        override fun newStruct(name: String, f: TreeBuilder.() -> Unit): DataTree.Structure {
-            val builder = TreeBuilderImpl()
+        override fun newStruct(type: String, name: String, f: TreeBuilder.() -> Unit): DataTree.Structure {
+            val builder = TreeBuilderImpl(type)
             builder.f()
-            val structure = DataTree.Structure(builder.structure)
+            val structure = DataTree.Structure(builder.structure, type)
             locals.add(name to structure)
             builder.state.forEach { (loc, value) -> instructions.add(StoreInstruction(loc, null, value)) }
             return structure
@@ -108,7 +106,7 @@ private class ExampleBuilder(val makeStorage : TreeBuilder.() -> Unit) {
 
         override fun newVariable(type: String, name: String, value: String?): LocationId {
             val location = locations.allocate(LocationMetadata(type), name)
-            locals.add(name to DataTree.Leaf(location))
+            locals.add(name to DataTree.Leaf(location, type))
             value?.let { store(location, it) }
             return location
         }
@@ -118,21 +116,20 @@ private class ExampleBuilder(val makeStorage : TreeBuilder.() -> Unit) {
 
     fun getTrace() = Trace(
         contracts = storageLayout,
-        locations = locations.objects,
         initState = initialStorage,
         instructions = instructions,
         calls = calls.objects,
         sources = files.toList(),
     )
 
-    inner class TreeBuilderImpl : TreeBuilder {
+    inner class TreeBuilderImpl(val type : String) : TreeBuilder {
         val structure : MutableList<Pair<String, DataTree>> = mutableListOf()
         val state     : MutableMap<LocationId, DataValue>   = mutableMapOf()
 
-        override fun newStruct(name: String, f: TreeBuilder.() -> Unit): DataTree.Structure {
-            val child = TreeBuilderImpl()
+        override fun newStruct(type: String, name: String, f: TreeBuilder.() -> Unit): DataTree.Structure {
+            val child = TreeBuilderImpl(type)
             child.f()
-            val childTree = DataTree.Structure(child.structure)
+            val childTree = DataTree.Structure(child.structure, type)
             structure.add(name to childTree)
             state.putAll(child.state)
             return childTree
@@ -140,13 +137,13 @@ private class ExampleBuilder(val makeStorage : TreeBuilder.() -> Unit) {
 
         override fun newVariable(type: String, name: String, value: String?): LocationId {
             val location = locations.allocate(LocationMetadata(type), name)
-            val leaf = DataTree.Leaf(location)
+            val leaf = DataTree.Leaf(location, type)
             structure.add(name to leaf)
             value?.let { state[location] = DataValue(it) }
             return location
         }
 
-        fun getStructure() : DataTree.Structure = DataTree.Structure(structure)
+        fun getStructure() : DataTree.Structure = DataTree.Structure(structure, type)
     }
 
 }
