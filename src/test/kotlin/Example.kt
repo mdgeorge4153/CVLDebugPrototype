@@ -11,17 +11,17 @@ object example : Example {
         newStruct("ERC20", "ERC20") {
             newVariable("address", "(address)", "0xfffe")
 
-            newStruct("mapping(address => uint)", "_balances") {
+            newMapping("mapping(address => uint)", "_balances") {
                 newVariable("uint256", "0xffff", "16")
                 newVariable("uing256", "0xfffe")
             }
 
-            newStruct("mapping(address => mapping(address => uint))", "_allowances") {
-                newStruct("mapping(address => uint)", "0xfffe") {
+            newMapping("mapping(address => mapping(address => uint))", "_allowances") {
+                newMapping("mapping(address => uint)", "0xfffe") {
                     newVariable("uint256", "0xfffe", "10")
                     newVariable("uint256", "0xffff", "5")
                 }
-                newStruct("mapping(address => uint)", "TODO address 2") {
+                newMapping("mapping(address => uint)", "TODO address 2") {
                     newVariable("uint256", "0xfffe", "4")
                     newVariable("uint256", "0xffff", "12")
                 }
@@ -36,7 +36,7 @@ object example : Example {
             newVariable("uint256", "x")
         }
         newStruct("", "Ghosts") {
-            newStruct("mapping(address => uint)", "nativeBalances") {
+            newMapping("mapping(address => uint)", "nativeBalances") {
                 newVariable("uint", "0xfffe", "0")
                 newVariable("uint", "0xffff", "0")
             }

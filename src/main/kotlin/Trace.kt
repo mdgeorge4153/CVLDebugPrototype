@@ -6,6 +6,7 @@ data class Trace(
     val initState    : Map<LocationId, DataValue>,
     val instructions : List<Instruction>,
     val calls        : Map<CallId, CallMetadata>,
+    val locations    : Map<LocationId, LocationMetadata>,
     val sources      : List<String>,
 )
 
@@ -41,8 +42,16 @@ typealias LocationId = String
 // @Serializable
 // data class LocationId(val id: String)
 
+/**
+ * Metadata about a location
+ * @param type the CVL or Solidity type to be displayed for the location
+ * @param name the human-readable name to be displayed for data breakpoints on this location
+ */
 @Serializable
-data class LocationMetadata(val type : String)
+data class LocationMetadata(
+    val type : String,
+    val name : String,
+)
 
 /**
  * Data that can be stored in a location

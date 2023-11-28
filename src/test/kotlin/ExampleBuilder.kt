@@ -1,5 +1,6 @@
 interface TreeBuilder {
     fun newStruct(type : String, name : String, f : TreeBuilder.() -> Unit) : DataTree.Structure
+    fun newMapping(type : String, name : String, f : TreeBuilder.() -> Unit) : DataTree.Structure
     fun newVariable(type : String, name : String, value : String? = null): LocationId
 }
 
@@ -44,7 +45,7 @@ private class ExampleBuilder(makeStorage : TreeBuilder.() -> Unit) {
     var storageLayout  : DataTree.Structure
 
     init {
-        val storageBuilder = TreeBuilderImpl("Storage")
+        val storageBuilder = TreeBuilderImpl("Storage", "", false)
         storageBuilder.makeStorage()
         initialStorage = storageBuilder.state.toMap()
         storageLayout  = storageBuilder.getStructure()
@@ -95,8 +96,8 @@ private class ExampleBuilder(makeStorage : TreeBuilder.() -> Unit) {
         override val storage: DataTree
             get() = getStorage()
 
-        override fun newStruct(type: String, name: String, f: TreeBuilder.() -> Unit): DataTree.Structure {
-            val builder = TreeBuilderImpl(type)
+        private fun newChild(type: String, name: String, isMapping: Boolean, f: TreeBuilder.() -> Unit): DataTree.Structure {
+            val builder = TreeBuilderImpl(type, "", isMapping)
             builder.f()
             val structure = DataTree.Structure(builder.structure, type)
             locals.add(name to structure)
@@ -104,8 +105,14 @@ private class ExampleBuilder(makeStorage : TreeBuilder.() -> Unit) {
             return structure
         }
 
+        override fun newMapping(type: String, name: String, f: TreeBuilder.() -> Unit): DataTree.Structure
+            = newChild(type, name, isMapping = true, f)
+
+        override fun newStruct(type: String, name: String, f: TreeBuilder.() -> Unit): DataTree.Structure
+            = newChild(type, name, isMapping = false, f)
+
         override fun newVariable(type: String, name: String, value: String?): LocationId {
-            val location = locations.allocate(LocationMetadata(type), name)
+            val location = locations.allocate(LocationMetadata(type, "$functionName: $name"), name)
             locals.add(name to DataTree.Leaf(location, type))
             value?.let { store(location, it) }
             return location
@@ -120,14 +127,19 @@ private class ExampleBuilder(makeStorage : TreeBuilder.() -> Unit) {
         instructions = instructions,
         calls = calls.objects,
         sources = files.toList(),
+        locations = locations.objects,
     )
 
-    inner class TreeBuilderImpl(val type : String) : TreeBuilder {
+    inner class TreeBuilderImpl(val type : String, val prefix : String, val isMapping : Boolean) : TreeBuilder {
         val structure : MutableList<Pair<String, DataTree>> = mutableListOf()
         val state     : MutableMap<LocationId, DataValue>   = mutableMapOf()
 
-        override fun newStruct(type: String, name: String, f: TreeBuilder.() -> Unit): DataTree.Structure {
-            val child = TreeBuilderImpl(type)
+        private fun nameFor(name : String) : String
+            = if (isMapping) { "$prefix[$name]" } else if (prefix.isEmpty()) { name } else { "$prefix.$name" }
+
+
+        fun newChild(type: String, name: String, f: TreeBuilder.() -> Unit, isMapping: Boolean): DataTree.Structure {
+            val child = TreeBuilderImpl(type, nameFor(name), isMapping)
             child.f()
             val childTree = DataTree.Structure(child.structure, type)
             structure.add(name to childTree)
@@ -135,8 +147,14 @@ private class ExampleBuilder(makeStorage : TreeBuilder.() -> Unit) {
             return childTree
         }
 
+        override fun newStruct(type: String, name: String, f: TreeBuilder.() -> Unit): DataTree.Structure
+            = newChild(type, name, f, isMapping = false)
+
+        override fun newMapping(type: String, name: String, f: TreeBuilder.() -> Unit): DataTree.Structure
+            = newChild(type, name, f, isMapping = true)
+
         override fun newVariable(type: String, name: String, value: String?): LocationId {
-            val location = locations.allocate(LocationMetadata(type), name)
+            val location = locations.allocate(LocationMetadata(type, nameFor(name)), name)
             val leaf = DataTree.Leaf(location, type)
             structure.add(name to leaf)
             value?.let { state[location] = DataValue(it) }

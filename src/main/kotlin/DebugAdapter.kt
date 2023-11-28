@@ -11,24 +11,37 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
 
     constructor(trace : Trace) : this(State(trace))
 
-    var userBreakpoints : List<Breakpoint> = emptyList()
+    var lineBreakpoints : List<Breakpoint> = emptyList()
+    var dataBreakpoints : Array<DataBreakpoint> = arrayOf()
+
     lateinit var client : IDebugProtocolClient
 
     val variables = mutableListOf<DataTree.Structure>().apply { allocate(DataTree.Structure(listOf(), "dummy"))}
     val globalsId = variables.allocate(state.trace.contracts)
 
-    object capabilities : Capabilities() {
-        override fun getSupportsRestartRequest() = true
-        // override fun getSupportsBreakpointLocationsRequest() = true
-        override fun getSupportsFunctionBreakpoints() = true
-        override fun getSupportsDataBreakpoints() = true
-        override fun getSupportsStepBack() = true
-        override fun getSupportsRestartFrame() = true
-        override fun getSupportsLoadedSourcesRequest() = true
+    val capabilities = Capabilities().apply {
+        supportsRestartRequest = true
+        supportsDataBreakpoints = true
+        supportsStepBack = true
+        supportsRestartFrame = true
+        exceptionBreakpointFilters = arrayOf(
+            ExceptionBreakpointsFilter().apply {
+                filter = "revert"
+                label = "Contract function revert"
+                description = "This breakpoint is triggered when a contract function reverts."
+            },
+            ExceptionBreakpointsFilter().apply {
+                filter = "assert"
+                label  = "CVL assertion failure"
+                description = "This breakpoint is triggered when a CVL `assert` statement fails."
+                default_ = true
+            }
+        )
     }
 
     fun connect(client : IDebugProtocolClient) {
         this.client = client
+        client.initialized()
         log.println("connected")
     }
 
@@ -44,7 +57,6 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
 
     override fun initialize(args: InitializeRequestArguments?): CompletableFuture<Capabilities> {
         log.println("initializing")
-        client.initialized()
         return capabilities.asFuture()
     }
 
@@ -58,7 +70,7 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
         return done
     }
 
-    override fun attach(args: MutableMap<String, Any>?): CompletableFuture<Void> = done.also { log.println("attach") }
+    override fun attach(args: MutableMap<String, Any>?): CompletableFuture<Void> = done
 
     override fun restart(args: RestartArguments?): CompletableFuture<Void> {
         log.println("restart")
@@ -89,13 +101,22 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
     }
 
     override fun dataBreakpointInfo(args: DataBreakpointInfoArguments?): CompletableFuture<DataBreakpointInfoResponse> {
-        // TODO
-        return DataBreakpointInfoResponse().asFuture()
+
+        val location = variables[args!!.variablesReference].get(args.name)
+        return DataBreakpointInfoResponse().apply {
+            dataId = location
+            description = state.trace.locations[location]?.name ?: args.name
+            accessTypes = DataBreakpointAccessType.values()
+            canPersist = true
+        }.asFuture()
     }
 
     override fun setDataBreakpoints(args: SetDataBreakpointsArguments?): CompletableFuture<SetDataBreakpointsResponse> {
-        // TODO
-        return SetDataBreakpointsResponse().asFuture()
+        dataBreakpoints = args!!.breakpoints
+
+        return SetDataBreakpointsResponse().apply {
+            breakpoints = dataBreakpoints.map { Breakpoint().apply { isVerified = true } }.toTypedArray()
+        }.asFuture()
     }
 
     private fun sendStoppedMessage(stopReason : String = "step") {
@@ -107,40 +128,54 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
     }
 
     override fun continue_(args: ContinueArguments?): CompletableFuture<ContinueResponse> {
-        // TODO
+        runUntilBreakOr { false }
+        sendStoppedMessage()
         return ContinueResponse().asFuture()
     }
 
     override fun next(args: NextArguments?): CompletableFuture<Void> {
         val currentCall = state.stack.last().callId
-        state.runUntil { it is NewlineInstruction && it.context == currentCall }
+        runUntilBreakOr {
+            it is NewlineInstruction && it.context == currentCall
+            || it is ReturnInstruction && it.call == currentCall
+        }
         sendStoppedMessage()
         return done
     }
 
     override fun stepIn(args: StepInArguments?): CompletableFuture<Void> {
-        // TODO
+        runUntilBreakOr { it is NewlineInstruction || it is CallInstruction }
+        sendStoppedMessage()
         return done
     }
 
     override fun stepOut(args: StepOutArguments?): CompletableFuture<Void> {
-        // TODO
+        val callId = state.stack.last().callId
+        runUntilBreakOr { it is ReturnInstruction && it.call == callId }
+        sendStoppedMessage()
         return done
     }
 
     override fun stepBack(args: StepBackArguments?): CompletableFuture<Void> {
-        state.reverseUntil { it is NewlineInstruction && it.context == state.stack.last().callId }
+        val callId = state.stack.last().callId
+        reverseUntilBreakOr {
+            it is NewlineInstruction && it.context == callId
+            || it is CallInstruction && it.call == callId
+        }
         sendStoppedMessage()
         return done
     }
 
     override fun reverseContinue(args: ReverseContinueArguments?): CompletableFuture<Void> {
-        // TODO
+        reverseUntilBreakOr { false }
+        sendStoppedMessage()
         return done
     }
 
     override fun restartFrame(args: RestartFrameArguments?): CompletableFuture<Void> {
-        // TODO
+        val callId = state.stack.last().callId
+        reverseUntilBreakOr { it is CallInstruction && it.call == callId }
+        sendStoppedMessage()
         return done
     }
 
@@ -201,18 +236,23 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
         }.asFuture()
     }
 
-    override fun loadedSources(args: LoadedSourcesArguments?): CompletableFuture<LoadedSourcesResponse> {
-        // TODO
-        return LoadedSourcesResponse().asFuture()
+    private fun runUntilBreakOr(predicate : (Instruction) -> Boolean) {
+        state.runUntil { instruction ->
+            predicate(instruction) || dataBreakpoints.any { it.matches(instruction) }
+        }
     }
 
-    override fun evaluate(args: EvaluateArguments?): CompletableFuture<EvaluateResponse> {
-        // TODO
-        return EvaluateResponse().asFuture()
+    private fun reverseUntilBreakOr(predicate: (Instruction) -> Boolean) {
+        state.reverseUntil { instruction ->
+            predicate(instruction) || dataBreakpoints.any { it.matches(instruction) }
+        }
     }
+}
 
-
-
+private fun DataBreakpoint.matches(instruction: Instruction): Boolean = when(instruction) {
+    is LoadInstruction  -> instruction.location == this.dataId && this.accessType != DataBreakpointAccessType.WRITE
+    is StoreInstruction -> instruction.location == this.dataId && this.accessType != DataBreakpointAccessType.READ
+    else -> false
 }
 
 // stack frame

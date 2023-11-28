@@ -7,7 +7,7 @@
 		{
 			"type": "CVL",
 			"request": "launch",
-			"name": "Debug readme.md"
+			"name": "Debug transferSpec"
 		}
 	]
 }
