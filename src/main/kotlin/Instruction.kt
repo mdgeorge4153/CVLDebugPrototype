@@ -34,11 +34,11 @@ class ReturnInstruction(
 
 /** An assert statement in spec that fails */
 @Serializable
-data object AssertInstruction : Instruction
+class AssertInstruction : Instruction
 
 /** A contract call reverting */
 @Serializable
-data object RevertInstruction : Instruction
+class RevertInstruction : Instruction
 
 /** Indicates the start of a new source line (for stepping) */
 @Serializable
