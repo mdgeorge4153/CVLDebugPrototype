@@ -7,19 +7,19 @@ import kotlin.system.exitProcess
 
 val log = File("logs/log.txt").printWriter()
 
-class DebugAdapter(val state : State) : IDebugProtocolServer {
+class DebugAdapter(private val state : State) : IDebugProtocolServer {
 
     constructor(trace : Trace) : this(State(trace))
 
-    var lineBreakpoints : List<Breakpoint> = emptyList()
-    var dataBreakpoints : Array<DataBreakpoint> = arrayOf()
+    private var lineBreakpoints : List<Breakpoint> = emptyList()
+    private var dataBreakpoints : Array<DataBreakpoint> = arrayOf()
 
-    lateinit var client : IDebugProtocolClient
+    private lateinit var client : IDebugProtocolClient
 
-    val variables = mutableListOf<DataTree.Structure>().apply { allocate(DataTree.Structure(listOf(), "dummy"))}
-    val globalsId = variables.allocate(state.trace.contracts)
+    private val variables = mutableListOf<DataTree.Structure>().apply { allocate(DataTree.Structure(listOf(), "dummy"))}
+    private val globalsId = variables.allocate(state.trace.contracts)
 
-    val capabilities = Capabilities().apply {
+    private val capabilities = Capabilities().apply {
         supportsRestartRequest = true
         supportsDataBreakpoints = true
         supportsStepBack = true
@@ -106,8 +106,7 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
         return DataBreakpointInfoResponse().apply {
             dataId = location
             description = state.trace.locations[location]?.name ?: args.name
-            accessTypes = DataBreakpointAccessType.values()
-            canPersist = true
+            accessTypes = DataBreakpointAccessType.entries.toTypedArray()
         }.asFuture()
     }
 
@@ -180,7 +179,7 @@ class DebugAdapter(val state : State) : IDebugProtocolServer {
     }
 
     override fun pause(args: PauseArguments?): CompletableFuture<Void> {
-        // we are always paused, but this function is not optional so we just return
+        // we are always paused, but this function is not optional, so we just return
         return done
     }
 
@@ -255,23 +254,6 @@ private fun DataBreakpoint.matches(instruction: Instruction): Boolean = when(ins
     else -> false
 }
 
-// stack frame
-//   scope (Contracts)
-//     variable (contract)
-//       variable (field)
-//   scope (Ghosts)
-//   scope (Locals)
-
-class DAPSnapshot(val state : State) {
-    val variableSets : MutableList<Variable> = mutableListOf()
-    val frames       : MutableList<StackFrame> = mutableListOf()
-    val scopes       : MutableList<Scope> = mutableListOf()
-
-    init {
-
-    }
-}
-
 fun <T> MutableList<T>.allocate(t : T) : Int {
     val result = size
     add(t)
@@ -282,5 +264,5 @@ fun <T> MutableList<T>.allocate(t : T) : Int {
 fun <T> T.asFuture() : CompletableFuture<T> = CompletableFuture.completedFuture(this)
 
 /** Used to indicate a completed future with no result */
-val done = CompletableFuture.allOf()
+val done = CompletableFuture.allOf()!!
 

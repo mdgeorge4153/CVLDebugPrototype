@@ -2,7 +2,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * An event of interest that occurs during execution.  Instructions contain enough data that
- * they can be both applied and unapplied without additional information about the trace.  For example,
+ * they can be both applied and rolled back without additional information about the trace.  For example,
  * [StoreInstruction]s contain the old value as well as the new value so that they can be easily rolled back
  */
 @Serializable
@@ -20,13 +20,13 @@ class StoreInstruction(
     val newValue : DataValue,
 ) : Instruction
 
-/** Begin [call] with [args] */
+/** Begin [call] */
 @Serializable
 class CallInstruction(
     val call : CallId,
 ) : Instruction
 
-/** Return from [call], popping local variables [popped] */
+/** Return from [call] */
 @Serializable
 class ReturnInstruction(
     val call   : CallId,
@@ -34,11 +34,11 @@ class ReturnInstruction(
 
 /** An assert statement in spec that fails */
 @Serializable
-class AssertInstruction : Instruction
+data object AssertInstruction : Instruction
 
 /** A contract call reverting */
 @Serializable
-class RevertInstruction : Instruction
+data object RevertInstruction : Instruction
 
 /** Indicates the start of a new source line (for stepping) */
 @Serializable
