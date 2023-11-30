@@ -32,7 +32,7 @@
         "label": "CVL Debug",
 
         "program": "./backend.sh",
-        "languages": [ "cvl" ]
+        "languages": [ "cvl", "solidity" ]
 
       }
     ]
