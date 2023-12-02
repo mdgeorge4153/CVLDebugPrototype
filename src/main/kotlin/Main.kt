@@ -10,8 +10,5 @@ fun main() {
     val launcher = DSPLauncher.createServerLauncher(adapter, System.`in`, System.out)
     adapter.connect(launcher.remoteProxy)
 
-    log.println("adapter started")
-    log.flush()
-
     launcher.startListening()
 }

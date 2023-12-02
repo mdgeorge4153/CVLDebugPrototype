@@ -8,6 +8,11 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed interface Instruction
 
+/** A reason to stop, such as a breakpoint or line ending */
+interface StopCondition {
+    fun triggeredBy(i : Instruction) : Boolean
+}
+
 /** Read a variable */
 @Serializable
 class LoadInstruction(val location: LocationId) : Instruction

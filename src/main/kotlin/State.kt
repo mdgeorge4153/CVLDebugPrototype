@@ -12,50 +12,38 @@ class State(
         apply(trace.instructions.first())
     }
 
-    private fun apply(i : Instruction) = when(i) {
-        is CallInstruction    -> stack.push(StackFrame(i.call)).ignore()
-        is NewlineInstruction -> stack.last().sourceLine = i.newLine
-        is ReturnInstruction  -> stack.pop().ignore()
-        is StoreInstruction   -> data[i.location] = i.newValue
-
-        is LoadInstruction, is AssertInstruction, is RevertInstruction -> Unit
-    }
-
-    private fun unapply(i : Instruction) = when(i) {
-        is CallInstruction    -> stack.pop().ignore()
-        is ReturnInstruction  -> stack.push(StackFrame(i.call)).ignore()
-        is StoreInstruction   -> data.replaceOrDrop(i.location, i.oldValue).ignore()
-        is NewlineInstruction -> stack.last().sourceLine = i.oldLine
-
-        is LoadInstruction, is AssertInstruction, is RevertInstruction -> Unit
-    }
-
     /**
      * Run forward until either:
      *  - the end of the trace is reached
-     *  - an executed instruction satisfies [predicate]
+     *  - an executed instruction triggers one or more [stopConditions]
+     * @return the list of triggered breakpoints (which is empty if the end of the trace is reached)
      */
-    fun runUntil(predicate : (Instruction) -> Boolean) {
-        if (!next.hasNext()) { return }
-
-        do {
+    fun <C : StopCondition> runUntil(stopConditions : List<C>) : List<C> {
+        while (next.hasNext()) {
             val instruction = next.next()
             apply(instruction)
-        } while (next.hasNext() && !predicate(instruction))
+            val triggered = stopConditions.filter { it.triggeredBy(instruction) }
+            if (triggered.isNotEmpty()) { return triggered }
+        }
+
+        return emptyList()
     }
 
     /**
      * Run backward until either:
      *  - the beginning of the trace is reached
-     *  - an undone instruction satisfies [predicate]
+     *  - an undone instruction triggers one or more [stopConditions]
+     * @return the list of triggered breakpoints (which is empty if the beginning of the trace is reached)
      */
-    fun reverseUntil(predicate : (Instruction) -> Boolean) {
-        if (!next.hasPrevious()) { return }
-
-        do {
+    fun <C : StopCondition> reverseUntil(stopConditions : List<C>) : List<C> {
+        while(next.hasPrevious()) {
             val instruction = next.previous()
             unapply(instruction)
-        } while(next.hasPrevious() && !predicate(instruction))
+            val triggered = stopConditions.filter { it.triggeredBy(instruction) }
+            if (triggered.isNotEmpty()) { return triggered }
+        }
+
+        return emptyList()
     }
 
     inner class StackFrame(
@@ -64,13 +52,24 @@ class State(
         var sourceLine : SourceLocation = trace.calls[callId]!!.startLocation
         val call : CallMetadata = trace.calls[callId]!!
     }
+
+    private fun apply(i : Instruction) = when(i) {
+        is CallInstruction    -> ignore()
+        is NewlineInstruction -> stack.last().sourceLine = i.newLine
+        is ReturnInstruction  -> ignore()
+        is StoreInstruction   -> data[i.location] = i.newValue
+
+        is LoadInstruction, is AssertInstruction, is RevertInstruction -> Unit
+    }
+
+    private fun unapply(i : Instruction) = when(i) {
+        is CallInstruction    -> ignore()
+        is ReturnInstruction  -> ignore()
+        is StoreInstruction   -> ignore()
+        is NewlineInstruction -> stack.last().sourceLine = i.oldLine
+
+        is LoadInstruction, is AssertInstruction, is RevertInstruction -> Unit
+    }
 }
 
-
-fun Any?.ignore() : Unit = Unit
-
-fun <K,V> MutableMap<K,V>.replaceOrDrop(key : K, value : V?) : V?
-        = value?.let { this.replace(key, it) } ?: this.remove(key)
-
-fun <T> MutableList<T>.push(e : T) = add(e)
-fun <T> MutableList<T>.pop() : T   = removeLast()
+fun ignore(): Unit = Unit

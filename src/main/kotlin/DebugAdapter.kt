@@ -1,18 +1,15 @@
 import org.eclipse.lsp4j.debug.*
 import org.eclipse.lsp4j.debug.services.IDebugProtocolClient
 import org.eclipse.lsp4j.debug.services.IDebugProtocolServer
-import java.io.File
 import java.util.concurrent.CompletableFuture
 import kotlin.system.exitProcess
-
-val log = File("logs/log.txt").printWriter()
 
 class DebugAdapter(private val state : State) : IDebugProtocolServer {
 
     constructor(trace : Trace) : this(State(trace))
 
-    private var lineBreakpoints : List<Breakpoint> = emptyList()
-    private var dataBreakpoints : Array<DataBreakpoint> = arrayOf()
+    private var lineBreakpoints : List<DAPStopCondition> = emptyList()
+    private var dataBreakpoints : List<DAPStopCondition> = emptyList()
 
     private lateinit var client : IDebugProtocolClient
 
@@ -42,7 +39,6 @@ class DebugAdapter(private val state : State) : IDebugProtocolServer {
     fun connect(client : IDebugProtocolClient) {
         this.client = client
         client.initialized()
-        log.println("connected")
     }
 
     override fun terminate(args: TerminateArguments?): CompletableFuture<Void> {
@@ -56,13 +52,12 @@ class DebugAdapter(private val state : State) : IDebugProtocolServer {
     }
 
     override fun initialize(args: InitializeRequestArguments?): CompletableFuture<Capabilities> {
-        log.println("initializing")
         return capabilities.asFuture()
     }
 
     override fun launch(args: MutableMap<String, Any>?): CompletableFuture<Void> {
         client.stopped(StoppedEventArguments().apply {
-            reason = "entry"
+            reason = StoppedEventArgumentsReason.ENTRY
             description = "Call trace has been loaded"
             threadId = 0
             allThreadsStopped = true
@@ -73,11 +68,12 @@ class DebugAdapter(private val state : State) : IDebugProtocolServer {
     override fun attach(args: MutableMap<String, Any>?): CompletableFuture<Void> = done
 
     override fun restart(args: RestartArguments?): CompletableFuture<Void> {
-        log.println("restart")
-
-        state.reverseUntil { false }
+        state.reverseUntil(stopConditions = emptyList())
         client.stopped(StoppedEventArguments().apply {
-            reason = "TODO"
+            reason = StoppedEventArgumentsReason.ENTRY
+            description = "Execution restarted"
+            threadId = 0
+            allThreadsStopped = true
         })
         return done
     }
@@ -101,7 +97,6 @@ class DebugAdapter(private val state : State) : IDebugProtocolServer {
     }
 
     override fun dataBreakpointInfo(args: DataBreakpointInfoArguments?): CompletableFuture<DataBreakpointInfoResponse> {
-
         val location = variables[args!!.variablesReference].get(args.name)
         return DataBreakpointInfoResponse().apply {
             dataId = location
@@ -111,24 +106,24 @@ class DebugAdapter(private val state : State) : IDebugProtocolServer {
     }
 
     override fun setDataBreakpoints(args: SetDataBreakpointsArguments?): CompletableFuture<SetDataBreakpointsResponse> {
-        dataBreakpoints = args!!.breakpoints
+        // set up internal breakpoints
+        dataBreakpoints = args!!.breakpoints.flatMap { breakpoint ->
+            val location = breakpoint!!.dataId
+            val name     = state.trace.locations[location]?.name ?: "data"
+            listOfNotNull(
+                ReadAccess  (location, name).takeIf { breakpoint.accessType != DataBreakpointAccessType.WRITE },
+                WriteAccess (location, name).takeIf { breakpoint.accessType != DataBreakpointAccessType.READ },
+            )
+        }
 
+        // construct response
         return SetDataBreakpointsResponse().apply {
             breakpoints = dataBreakpoints.map { Breakpoint().apply { isVerified = true } }.toTypedArray()
         }.asFuture()
     }
 
-    private fun sendStoppedMessage(stopReason : String = "step") {
-        client.stopped(StoppedEventArguments().apply {
-            reason = stopReason
-            threadId = 0
-            allThreadsStopped = true
-        })
-    }
-
     override fun continue_(args: ContinueArguments?): CompletableFuture<ContinueResponse> {
         runUntilBreakOr { false }
-        sendStoppedMessage()
         return ContinueResponse().asFuture()
     }
 
@@ -138,20 +133,17 @@ class DebugAdapter(private val state : State) : IDebugProtocolServer {
             it is NewlineInstruction && it.context == currentCall
             || it is ReturnInstruction && it.call == currentCall
         }
-        sendStoppedMessage()
         return done
     }
 
     override fun stepIn(args: StepInArguments?): CompletableFuture<Void> {
         runUntilBreakOr { it is NewlineInstruction || it is CallInstruction }
-        sendStoppedMessage()
         return done
     }
 
     override fun stepOut(args: StepOutArguments?): CompletableFuture<Void> {
         val callId = state.stack.last().callId
         runUntilBreakOr { it is ReturnInstruction && it.call == callId }
-        sendStoppedMessage()
         return done
     }
 
@@ -161,20 +153,17 @@ class DebugAdapter(private val state : State) : IDebugProtocolServer {
             it is NewlineInstruction && it.context == callId
             || it is CallInstruction && it.call == callId
         }
-        sendStoppedMessage()
         return done
     }
 
     override fun reverseContinue(args: ReverseContinueArguments?): CompletableFuture<Void> {
         reverseUntilBreakOr { false }
-        sendStoppedMessage()
         return done
     }
 
     override fun restartFrame(args: RestartFrameArguments?): CompletableFuture<Void> {
         val callId = state.stack.last().callId
         reverseUntilBreakOr { it is CallInstruction && it.call == callId }
-        sendStoppedMessage()
         return done
     }
 
@@ -184,7 +173,6 @@ class DebugAdapter(private val state : State) : IDebugProtocolServer {
     }
 
     override fun stackTrace(args: StackTraceArguments?): CompletableFuture<StackTraceResponse> {
-        log.println("stackTrace")
         val frames = state.stack.map { frame ->
             StackFrame().apply {
                 id = variables.allocate(state.trace.calls[frame.callId]!!.locals)
@@ -200,8 +188,6 @@ class DebugAdapter(private val state : State) : IDebugProtocolServer {
     }
 
     override fun scopes(args: ScopesArguments?): CompletableFuture<ScopesResponse> {
-        log.println("scopes")
-
         return ScopesResponse().apply {
             scopes = arrayOf(
                 Scope().apply {
@@ -229,29 +215,57 @@ class DebugAdapter(private val state : State) : IDebugProtocolServer {
     }
 
     override fun threads(): CompletableFuture<ThreadsResponse> {
-        log.println("threads")
         return ThreadsResponse().apply {
             threads = arrayOf(Thread().apply { id = 0; name = "rule" })
         }.asFuture()
     }
 
     private fun runUntilBreakOr(predicate : (Instruction) -> Boolean) {
-        state.runUntil { instruction ->
-            predicate(instruction) || dataBreakpoints.any { it.matches(instruction) }
-        }
+        val reasons = state.runUntil(lineBreakpoints + dataBreakpoints + StepFinished(predicate))
+        notifyStopped(reasons.firstOrNull() ?: OtherReason("End of trace"))
     }
 
     private fun reverseUntilBreakOr(predicate: (Instruction) -> Boolean) {
-        state.reverseUntil { instruction ->
-            predicate(instruction) || dataBreakpoints.any { it.matches(instruction) }
-        }
+        val reasons = state.reverseUntil(lineBreakpoints + dataBreakpoints + StepFinished(predicate))
+        notifyStopped(reasons.firstOrNull() ?: OtherReason("Beginning of trace"))
+    }
+
+    private fun notifyStopped(stopReason : DAPStopCondition) {
+        client.stopped(StoppedEventArguments().apply {
+            reason      = stopReason.reason
+            description = stopReason.description
+            threadId    = 0
+            allThreadsStopped = true
+        })
     }
 }
 
-private fun DataBreakpoint.matches(instruction: Instruction): Boolean = when(instruction) {
-    is LoadInstruction  -> instruction.location == this.dataId && this.accessType != DataBreakpointAccessType.WRITE
-    is StoreInstruction -> instruction.location == this.dataId && this.accessType != DataBreakpointAccessType.READ
-    else -> false
+interface DAPStopCondition : StopCondition {
+    val reason      : String
+    val description : String
+}
+
+class ReadAccess(val locationId: LocationId, locationDescription: String) : DAPStopCondition {
+    override val reason      = StoppedEventArgumentsReason.DATA_BREAKPOINT
+    override val description = "$locationDescription was read"
+    override fun triggeredBy(i: Instruction) = i is LoadInstruction && i.location == locationId
+}
+
+class WriteAccess(val locationId: LocationId, locationDescription: String) : DAPStopCondition {
+    override val reason      = StoppedEventArgumentsReason.DATA_BREAKPOINT
+    override val description = "$locationDescription was written"
+    override fun triggeredBy(i: Instruction) = i is StoreInstruction && i.location == locationId
+}
+
+class StepFinished(val predicate: (Instruction) -> Boolean) : DAPStopCondition {
+    override val reason      = StoppedEventArgumentsReason.STEP
+    override val description = "Step completed"
+    override fun triggeredBy(i: Instruction) = predicate(i)
+}
+
+class OtherReason(override val description : String) : DAPStopCondition {
+    override val reason      = StoppedEventArgumentsReason.STEP
+    override fun triggeredBy(i: Instruction) = false
 }
 
 fun <T> MutableList<T>.allocate(t : T) : Int {
